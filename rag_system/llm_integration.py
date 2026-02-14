@@ -11,15 +11,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from transformers import BitsAndBytesConfig
 
 
-def _load_hf_token_from_env() -> None:
+def _load_hf_token_from_env() -> Optional[str]:
+    """Load HuggingFace token from .env file (optional - only needed for gated models)."""
     load_dotenv(os.path.join("./.env.txt"))
     hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
     if not hf_token:
-        raise ValueError(
-            "HUGGINGFACE_HUB_TOKEN not found in environment.\n"
-            "Please create .env.txt with: HUGGINGFACE_HUB_TOKEN=your_token_here\n"
-            "Get token from: https://huggingface.co/settings/tokens"
-        )
+        print("ℹ️  No HuggingFace token found (optional - only needed for gated models like Phi-3)")
+    return hf_token
   
 
 class RAGPrompt:
@@ -92,9 +90,8 @@ class HFBackend:
         else:
             print(f"🌐 Loading model from HuggingFace: {model_name}")
             print(f"   (Will use cached version if available)")
-            _load_hf_token_from_env()
+            use_auth_token = _load_hf_token_from_env()
             model_path = model_name
-            use_auth_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
             local_files_only = False
 
         self.tokenizer = AutoTokenizer.from_pretrained(
