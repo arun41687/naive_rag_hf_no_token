@@ -16,7 +16,7 @@ def _load_hf_token_from_env() -> Optional[str]:
     load_dotenv(os.path.join("./.env.txt"))
     hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
     if not hf_token:
-        print("No HuggingFace token found (optional - only needed for gated models like Phi-3)")
+        print("ℹ️  No HuggingFace token found (optional - only needed for gated models like Phi-3)")
     return hf_token
   
 
@@ -83,12 +83,12 @@ class HFBackend:
 
         # Determine if loading from local path (Kaggle dataset) or HuggingFace
         if local_model_path and os.path.exists(local_model_path):
-            print(f"Loading model from local path: {local_model_path}")
+            print(f"📂 Loading model from local path: {local_model_path}")
             model_path = local_model_path
             use_auth_token = None
             local_files_only = True
         else:
-            print(f"Loading model from HuggingFace: {model_name}")
+            print(f"🌐 Loading model from HuggingFace: {model_name}")
             print(f"   (Will use cached version if available)")
             use_auth_token = _load_hf_token_from_env()
             model_path = model_name
@@ -171,8 +171,15 @@ class HFBackend:
         )
 
         output_text = self.tokenizer.decode(generated[0], skip_special_tokens=True)
-        if output_text.startswith(prompt_text):
+        
+        # Extract only the generated answer (remove prompt)
+        # For chat templates (Mistral uses [INST]...[/INST] format)
+        if "[/INST]" in output_text:
+            output_text = output_text.split("[/INST]")[-1].strip()
+        elif output_text.startswith(prompt_text):
+            # Fallback for non-chat-template models
             output_text = output_text[len(prompt_text):]
+        
         return output_text.strip()
 
     def _format_prompt(self, system_prompt: str, user_prompt: str) -> str:
