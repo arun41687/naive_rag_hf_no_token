@@ -1,3 +1,6 @@
+<<<<<<< HEAD
+# naive_rag_hf
+=======
 # RAG System for SEC Filing Analysis
 
 A Retrieval-Augmented Generation (RAG) system for answering complex questions about Apple and Tesla's SEC 10-K filings using open-source LLMs.
@@ -7,7 +10,7 @@ A Retrieval-Augmented Generation (RAG) system for answering complex questions ab
 ✅ **Document Ingestion**: Parse PDF documents with semantic chunking  
 ✅ **Vector Search**: Efficient similarity search using FAISS  
 ✅ **Re-ranking**: Cross-encoder based re-ranking for higher relevance  
-✅ **Open-Source LLM**: Phi-3 via Hugging Face (token-based access if gated)  
+✅ **Open-Source LLM**: Mistral-7B via Hugging Face (no token required)  
 ✅ **Source Citation**: Accurate citations with document names and page numbers  
 ✅ **Out-of-Scope Handling**: Intelligent filtering of unanswerable questions  
 ✅ **Cloud-Ready**: Fully runnable on Kaggle/Colab notebooks  
@@ -27,7 +30,7 @@ FAISS Retrieval (Top-15)
     ↓
 Cross-Encoder Re-ranking (Top-5)
     ↓
-LLM (Phi-3) + Custom Prompt
+LLM (Mistral-7B) + Custom Prompt
     ↓
 Answer + Sources
 ```
@@ -61,7 +64,7 @@ Answer + Sources
     pip install -r requirements.txt
    ```
 
-4. **Set Hugging Face token** (required for gated models):
+4. **Set Hugging Face token** (optional - not needed for Mistral-7B):
         - Create a file at `./.env.txt` with:
             ```
             HUGGINGFACE_HUB_TOKEN=your_token_here
@@ -70,6 +73,7 @@ Answer + Sources
             ```bash
             export HUGGINGFACE_HUB_TOKEN=your_token_here
             ```
+        - Only required if using gated models (e.g., Phi-3, Llama-2)
 
 5. **Place PDF documents** in the project root:
    - `10-Q4-2024-As-Filed.pdf` (Apple 10-K)
@@ -104,7 +108,7 @@ python main.py --help
 **Options**:
 - `--mode {index,query,evaluate}`: Operation mode (default: evaluate)
 - `--query TEXT`: Question to answer (required for query mode)
-- `--model MODEL`: LLM model name (default: microsoft/Phi-3-mini-4k-instruct)
+- `--model MODEL`: LLM model name (default: mistralai/Mistral-7B-Instruct-v0.2)
 - `--embedding-model MODEL`: Embedding model (default: all-MiniLM-L6-v2)
 - `--index-dir PATH`: Directory for saving/loading index (default: ./rag_index)
 
@@ -131,7 +135,7 @@ python main.py --mode evaluate
 from rag_system import RAGSystem
 
 # Initialize
-rag = RAGSystem(model_name="microsoft/Phi-3-mini-4k-instruct", use_reranker=True)
+rag = RAGSystem(model_name="mistralai/Mistral-7B-Instruct-v0.2", use_reranker=True)
 
 # Ingest documents
 documents = [
@@ -330,4 +334,5 @@ For issues, questions, or suggestions:
 
 ---
 
-**Built with**: Sentence-Transformers • FAISS • Hugging Face Transformers • Phi-3
+**Built with**: Sentence-Transformers • FAISS • Hugging Face Transformers • Mistral-7B
+>>>>>>> 7da35b7 (Initial Commit)

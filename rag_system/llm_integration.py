@@ -104,7 +104,7 @@ class HFBackend:
             local_files_only=local_files_only,
         )
 
-        # Load config and patch for Phi-3 compatibility
+        # Load model config
         print(f"📝 Loading model config...")
         config = AutoConfig.from_pretrained(
             model_path,
@@ -112,23 +112,11 @@ class HFBackend:
             trust_remote_code=True,
             local_files_only=local_files_only,
         )
-        
-        # Fix Phi-3 RoPE configuration issue
-        if "phi" in model_name.lower() or "phi" in str(config.model_type).lower():
-            print(f"🔧 Detected Phi model - applying compatibility fixes...")
-            config._attn_implementation = "eager"
-            
-            # Remove problematic rope_scaling if it's incomplete
-            if hasattr(config, 'rope_scaling') and config.rope_scaling:
-                if isinstance(config.rope_scaling, dict) and 'type' not in config.rope_scaling:
-                    print(f"   ⚠️  Removing incomplete rope_scaling config")
-                    config.rope_scaling = None
 
         load_kwargs: Dict[str, object] = {
-            "config": config,  # Use patched config
+            "config": config,
             "device_map": "auto",
             "trust_remote_code": True,
-            "attn_implementation": "eager",  # Fix for Phi-3 flash-attention issues
             "local_files_only": local_files_only,
         }
         
@@ -211,7 +199,7 @@ class LLMIntegration:
     
     def __init__(
         self,
-        model_name: str = "microsoft/Phi-3-mini-4k-instruct",
+        model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
         temperature: float = 0.3,
         max_new_tokens: int = 256,
         backend: str = "hf",

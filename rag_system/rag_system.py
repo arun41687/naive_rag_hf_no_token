@@ -12,7 +12,7 @@ class RAGSystem:
     
     def __init__(
         self,
-        model_name: str = "microsoft/Phi-3-mini-4k-instruct",
+        model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
         embedding_model: str = "all-MiniLM-L6-v2",
         chunk_size: int = 500,
         chunk_overlap: int = 50,

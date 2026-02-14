@@ -10,7 +10,7 @@ from rag_system import RAGSystem, run_evaluation
 def detect_environment():
     """Detect if running on Kaggle and return appropriate model path."""
     # Check for Kaggle environment
-    kaggle_dataset_path = "/kaggle/input/microsoftphi-3-mini-4k-instruct"
+    kaggle_dataset_path = "/kaggle/input/mistralai-mistral-7b-instruct-v02"
     
     if os.path.exists("/kaggle") and os.path.exists(kaggle_dataset_path):
         print("🔍 Detected: Kaggle environment")
@@ -31,7 +31,7 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="microsoft/Phi-3-mini-4k-instruct",
+        default="mistralai/Mistral-7B-Instruct-v0.2",
         help="LLM model name",
     )
     parser.add_argument(
@@ -39,7 +39,7 @@ def main():
         type=str,
         default=None,
         help="Path to local model directory. Auto-detects Kaggle dataset if not specified. "
-             "On local: uses HF cache. On Kaggle: uses /kaggle/input/microsoftphi-3-mini-4k-instruct"
+             "On local: uses HF cache. On Kaggle: uses /kaggle/input/mistralai-mistral-7b-instruct-v02"
     )
     parser.add_argument("--embedding-model", type=str, default="all-MiniLM-L6-v2",
                        help="Embedding model name")
