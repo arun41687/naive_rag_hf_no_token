@@ -35,40 +35,46 @@ class DocumentIngestor:
         """
         chunks = []
         
-        with pdfplumber.open(pdf_path) as pdf:
-            full_text = ""
-            page_mapping = {}  # Map character position to page number
-            
-            for page_num, page in enumerate(pdf.pages, 1):
-                page_text = page.extract_text() or ""
-                start_pos = len(full_text)
-                full_text += page_text + "\n\n"
-                end_pos = len(full_text)
-                page_mapping[(start_pos, end_pos)] = page_num
+        if not os.path.exists(pdf_path):
+            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
         
-        # Split into overlapping chunks
-        for i in range(0, len(full_text), self.chunk_size - self.overlap):
-            chunk_text = full_text[i:i + self.chunk_size]
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                full_text = ""
+                page_mapping = {}  # Map character position to page number
+                
+                for page_num, page in enumerate(pdf.pages, 1):
+                    page_text = page.extract_text() or ""
+                    start_pos = len(full_text)
+                    full_text += page_text + "\n\n"
+                    end_pos = len(full_text)
+                    page_mapping[(start_pos, end_pos)] = page_num
             
-            if len(chunk_text.strip()) < 50:  # Skip very small chunks
-                continue
+                # Split into overlapping chunks
+                for i in range(0, len(full_text), self.chunk_size - self.overlap):
+                    chunk_text = full_text[i:i + self.chunk_size]
+                    
+                    if len(chunk_text.strip()) < 50:  # Skip very small chunks
+                        continue
+                    
+                    # Find which page(s) this chunk spans
+                    page_num = 1
+                    for (start, end), page in page_mapping.items():
+                        if start <= i < end:
+                            page_num = page
+                            break
+                    
+                    chunks.append({
+                        "id": f"{doc_name}_{len(chunks)}",
+                        "text": chunk_text,
+                        "document": doc_name,
+                        "page": page_num,
+                        "position": i
+                    })
             
-            # Find which page(s) this chunk spans
-            page_num = 1
-            for (start, end), page in page_mapping.items():
-                if start <= i < end:
-                    page_num = page
-                    break
-            
-            chunks.append({
-                "id": f"{doc_name}_{len(chunks)}",
-                "text": chunk_text,
-                "document": doc_name,
-                "page": page_num,
-                "position": i
-            })
-        
-        return chunks
+            return chunks
+        except Exception as e:
+            raise RuntimeError(f"Error parsing PDF {pdf_path}: {str(e)}") from e
 
 
 class VectorStore:
@@ -114,6 +120,9 @@ class VectorStore:
         Returns:
             List of (chunk, distance) tuples
         """
+        if self.index is None or not self.chunks:
+            raise RuntimeError("Vector store is empty. Add chunks before searching.")
+        
         query_embedding = self.model.encode([query], convert_to_numpy=True)
         distances, indices = self.index.search(query_embedding.astype(np.float32), k)
         

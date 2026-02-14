@@ -6,6 +6,21 @@ import argparse
 from pathlib import Path
 from rag_system import RAGSystem, run_evaluation
 
+
+def detect_environment():
+    """Detect if running on Kaggle and return appropriate model path."""
+    # Check for Kaggle environment
+    kaggle_dataset_path = "/kaggle/input/microsoftphi-3-mini-4k-instruct"
+    
+    if os.path.exists("/kaggle") and os.path.exists(kaggle_dataset_path):
+        print("🔍 Detected: Kaggle environment")
+        print(f"📂 Using dataset: {kaggle_dataset_path}")
+        return kaggle_dataset_path
+    else:
+        print("🔍 Detected: Local environment")
+        print("🌐 Will use HuggingFace cache/download (requires HF token)")
+        return None
+
 def main():
     """Main function to orchestrate the RAG system."""
     
@@ -13,7 +28,19 @@ def main():
     parser.add_argument("--mode", choices=["index", "query", "evaluate"], default="evaluate",
                        help="Mode of operation")
     parser.add_argument("--query", type=str, help="Query for query mode")
-    parser.add_argument("--model", type=str, default="phi3", help="LLM model name")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="microsoft/Phi-3-mini-4k-instruct",
+        help="LLM model name",
+    )
+    parser.add_argument(
+        "--local-model-path",
+        type=str,
+        default=None,
+        help="Path to local model directory. Auto-detects Kaggle dataset if not specified. "
+             "On local: uses HF cache. On Kaggle: uses /kaggle/input/microsoftphi-3-mini-4k-instruct"
+    )
     parser.add_argument("--embedding-model", type=str, default="all-MiniLM-L6-v2",
                        help="Embedding model name")
     parser.add_argument("--index-dir", type=str, default="./rag_index",
@@ -21,12 +48,32 @@ def main():
     
     args = parser.parse_args()
     
+    # Auto-detect environment if local_model_path not specified
+    if args.local_model_path is None:
+        detected_path = detect_environment()
+        args.local_model_path = detected_path
+    
     # Initialize RAG system
-    print("Initializing RAG system...")
+    print("\n🚀 Initializing RAG system...")
+    print(f"   Model: {args.model}")
+    
+    if args.mode == "index":
+        print(f"   📝 Mode: Index only")
+        print(f"   ⚡ LLM: Will NOT be loaded (not needed for indexing)")
+    else:
+        if args.local_model_path:
+            print(f"   📂 LLM will load from: {args.local_model_path}")
+            print(f"   🔓 HF Token: NOT REQUIRED")
+        else:
+            print(f"   🌐 LLM will load from: HuggingFace")
+            print(f"   🔑 HF Token: REQUIRED (from .env.txt)")
+        print(f"   ⚡ LLM: Lazy loading (loads on first query)")
+    
     rag = RAGSystem(
         model_name=args.model,
         embedding_model=args.embedding_model,
-        use_reranker=True
+        use_reranker=True,
+        local_model_path=args.local_model_path
     )
     
     # Define documents

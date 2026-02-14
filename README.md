@@ -7,7 +7,7 @@ A Retrieval-Augmented Generation (RAG) system for answering complex questions ab
 ✅ **Document Ingestion**: Parse PDF documents with semantic chunking  
 ✅ **Vector Search**: Efficient similarity search using FAISS  
 ✅ **Re-ranking**: Cross-encoder based re-ranking for higher relevance  
-✅ **Open-Source LLM**: Phi3 via Ollama (no API keys needed)  
+✅ **Open-Source LLM**: Phi-3 via Hugging Face (token-based access if gated)  
 ✅ **Source Citation**: Accurate citations with document names and page numbers  
 ✅ **Out-of-Scope Handling**: Intelligent filtering of unanswerable questions  
 ✅ **Cloud-Ready**: Fully runnable on Kaggle/Colab notebooks  
@@ -27,7 +27,7 @@ FAISS Retrieval (Top-15)
     ↓
 Cross-Encoder Re-ranking (Top-5)
     ↓
-LLM (Phi3) + Custom Prompt
+LLM (Phi-3) + Custom Prompt
     ↓
 Answer + Sources
 ```
@@ -36,11 +36,11 @@ Answer + Sources
 
 ### Prerequisites
 - Python 3.8+ (Tested on Python 3.10)
-- CUDA/GPU (recommended for Ollama, CPU also works but slower)
+- CUDA/GPU (recommended for HF models, CPU also works but slower)
 - 4GB+ RAM for embeddings, 8GB+ for LLM
 
 - Local: Python 3.10
-- Kaggle: Python 3.12 (use requirements_kaggle.txt)
+- Kaggle: Python 3.12
 
 ### Setup
 
@@ -58,17 +58,26 @@ Answer + Sources
 
 3. **Install dependencies**:
    ```bash
-   pip install -r requirements.txt (local, for python 3.10)
-   pip install -r requirements_kaggle.txt (kaggle, for python 3.12)
+    pip install -r requirements.txt
    ```
 
-4. **Download Ollama** (for LLM):
-   - Visit https://ollama.ai/ and install Ollama
-   - Pull Phi3 model: `ollama pull phi3`
+4. **Set Hugging Face token** (required for gated models):
+        - Create a file at `./.env.txt` with:
+            ```
+            HUGGINGFACE_HUB_TOKEN=your_token_here
+            ```
+        - Or set an environment variable directly:
+            ```bash
+            export HUGGINGFACE_HUB_TOKEN=your_token_here
+            ```
 
 5. **Place PDF documents** in the project root:
    - `10-Q4-2024-As-Filed.pdf` (Apple 10-K)
    - `tsla-20231231-gen.pdf` (Tesla 10-K)
+
+   - for Kaggle notebook:
+   - PDFs provided via Kaggle Dataset attachment
+
 
 ## Usage
 
@@ -95,7 +104,7 @@ python main.py --help
 **Options**:
 - `--mode {index,query,evaluate}`: Operation mode (default: evaluate)
 - `--query TEXT`: Question to answer (required for query mode)
-- `--model MODEL`: LLM model name (default: phi3)
+- `--model MODEL`: LLM model name (default: microsoft/Phi-3-mini-4k-instruct)
 - `--embedding-model MODEL`: Embedding model (default: all-MiniLM-L6-v2)
 - `--index-dir PATH`: Directory for saving/loading index (default: ./rag_index)
 
@@ -122,7 +131,7 @@ python main.py --mode evaluate
 from rag_system import RAGSystem
 
 # Initialize
-rag = RAGSystem(model_name="phi3", use_reranker=True)
+rag = RAGSystem(model_name="microsoft/Phi-3-mini-4k-instruct", use_reranker=True)
 
 # Ingest documents
 documents = [
@@ -206,15 +215,12 @@ Answers are returned in JSON format:
    ```bash
    !pip install -q -r requirements.txt
    ```
-4. **Install Ollama** (Kaggle GPU):
-   ```bash
-   !curl https://ollama.ai/install.sh | sh
-   ```
-5. **Pull phi3 model**:
-   ```bash
-   !ollama pull phi3 &
-   ```
-6. **Run RAG system**:
+4. **Set Hugging Face token** (required for gated models):
+    ```bash
+    import os
+    os.environ["HUGGINGFACE_HUB_TOKEN"] = "your_token_here"
+    ```
+5. **Run RAG system**:
    ```bash
    !python main.py --mode evaluate
    ```
@@ -259,11 +265,10 @@ naive_rag/
 ### Issue: "No module named 'pdfplumber'"
 **Solution**: `pip install pdfplumber`
 
-### Issue: "Failed to connect to Ollama"
-**Solution**: 
-- Ensure Ollama is installed and running
-- On Colab: Start Ollama service with `!ollama serve &`
-- Check if phi3 model is pulled: `ollama pull phi3`
+### Issue: "Repository not found" or model access denied
+**Solution**:
+- Ensure you accepted the model license on Hugging Face
+- Set `HUGGINGFACE_HUB_TOKEN` before running
 
 ### Issue: Slow embedding generation
 **Solution**:
@@ -325,4 +330,4 @@ For issues, questions, or suggestions:
 
 ---
 
-**Built with**: Sentence-Transformers • FAISS • Ollama • phi3 • LangChain
+**Built with**: Sentence-Transformers • FAISS • Hugging Face Transformers • Phi-3

@@ -12,11 +12,12 @@ class RAGSystem:
     
     def __init__(
         self,
-        model_name: str = "mistral",
+        model_name: str = "microsoft/Phi-3-mini-4k-instruct",
         embedding_model: str = "all-MiniLM-L6-v2",
         chunk_size: int = 500,
         chunk_overlap: int = 50,
-        use_reranker: bool = True
+        use_reranker: bool = True,
+        local_model_path: str = None  # Local model path (auto-detected or manual)
     ):
         """
         Initialize the RAG system.
@@ -27,12 +28,34 @@ class RAGSystem:
             chunk_size: Size of text chunks
             chunk_overlap: Overlap between chunks
             use_reranker: Whether to use re-ranking
+            local_model_path: Path to local model (e.g., Kaggle dataset)
         """
         self.ingestor = DocumentIngestor(chunk_size=chunk_size, overlap=chunk_overlap)
         self.vector_store = VectorStore(model_name=embedding_model)
         self.retriever = RetrieverWithReranker(self.vector_store, use_reranker=use_reranker)
-        self.llm = LLMIntegration(model_name=model_name)
+        
+        # Lazy load LLM (only when needed for queries)
+        self._model_name = model_name
+        self._local_model_path = local_model_path
+        self._llm = None  # Will be initialized on first query
+        
         self.indexed = False
+    
+    def _ensure_llm_loaded(self) -> None:
+        """Lazy load LLM only when needed (for queries, not indexing)."""
+        if self._llm is None:
+            print("\n🔄 Loading LLM (first query)...")
+            self._llm = LLMIntegration(
+                model_name=self._model_name,
+                local_model_path=self._local_model_path
+            )
+            print("✅ LLM loaded successfully!\n")
+    
+    @property
+    def llm(self):
+        """Property to access LLM, ensures it's loaded."""
+        self._ensure_llm_loaded()
+        return self._llm
     
     def ingest_documents(self, documents: List[Dict[str, str]]) -> None:
         """
@@ -69,6 +92,9 @@ class RAGSystem:
         Returns:
             Dictionary with 'answer' and 'sources' keys
         """
+        # Ensure LLM is loaded (lazy initialization)
+        self._ensure_llm_loaded()
+        
         if not self.indexed:
             return {
                 "answer": "Error: System not yet indexed. Please ingest documents first.",
@@ -156,8 +182,12 @@ class RAGSystem:
         print(f"Index loaded from {save_dir}")
 
 
-def run_evaluation(rag_system: RAGSystem) -> None:
-    """Run the evaluation on all test questions."""
+def run_evaluation(rag_system: RAGSystem) -> List[Dict]:
+    """Run the evaluation on all test questions.
+    
+    Returns:
+        List of answer dictionaries with question_id, answer, and sources
+    """
     
     questions = [
         {"question_id": 1, "question": "What was Apples total revenue for the fiscal year ended September 28, 2024?"},
@@ -195,12 +225,16 @@ def run_evaluation(rag_system: RAGSystem) -> None:
         print(f"Answer: {result['answer'][:100]}...")
         print(f"Sources: {result['sources']}\n")
     
-    # Save results
-    with open("evaluation_results.json", "w") as f:
+    # Save results with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"evaluation_results_{timestamp}.json"
+    
+    with open(output_file, "w") as f:
         json.dump(answers, f, indent=2)
     
     print("\n" + "="*80)
-    print("Evaluation complete! Results saved to evaluation_results.json")
+    print(f"Evaluation complete! Results saved to {output_file}")
     print("="*80)
     
     return answers

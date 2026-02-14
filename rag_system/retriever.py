@@ -20,7 +20,6 @@ class RetrieverWithReranker:
         
         if use_reranker:
             # Cross-encoder for better ranking
-            # self.reranker = CrossEncoder("cross-encoder/mmarco-MiniLMv2-L12-H384")
             self.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-12-v2")
     
     def retrieve(self, query: str, top_k: int = 5, rerank: bool = True) -> List[Dict]:
@@ -41,11 +40,9 @@ class RetrieverWithReranker:
         
         if rerank and self.use_reranker:
             # Re-rank using cross-encoder
+            pairs = [[query, r[0]["text"]] for r in results]
+            scores = self.reranker.predict(pairs)
             chunks = [r[0] for r in results]
-            texts = [r[0]["text"] for r in results]
-            
-            # Compute cross-encoder scores
-            scores = self.reranker.predict([[query, text] for text in texts])
             
             # Sort by cross-encoder scores (higher is better)
             ranked = sorted(

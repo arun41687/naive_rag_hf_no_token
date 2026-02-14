@@ -1,10 +1,26 @@
 """LLM integration module."""
 
-from typing import List, Dict
-# from langchain_community.llms import Ollama
-from langchain_ollama import OllamaLLM
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from __future__ import annotations
+
+import os
+from typing import List, Dict, Optional
+
+import torch
+from dotenv import load_dotenv
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+from transformers import BitsAndBytesConfig
+
+
+def _load_hf_token_from_env() -> None:
+    load_dotenv(os.path.join("./.env.txt"))
+    hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
+    if not hf_token:
+        raise ValueError(
+            "HUGGINGFACE_HUB_TOKEN not found in environment.\n"
+            "Please create .env.txt with: HUGGINGFACE_HUB_TOKEN=your_token_here\n"
+            "Get token from: https://huggingface.co/settings/tokens"
+        )
+  
 
 class RAGPrompt:
     """Manages RAG prompts and response generation."""
@@ -52,27 +68,179 @@ class RAGPrompt:
         return "\n\n---\n\n".join(parts)
 
 
+class HFBackend:
+    """Hugging Face backend for text generation."""
+
+    def __init__(
+        self,
+        model_name: str,
+        temperature: float = 0.3,
+        max_new_tokens: int = 120,
+        quantize_4bit: bool = True,
+        local_model_path: str = None,  # NEW: Allow loading from local path
+    ) -> None:
+        self.model_name = model_name
+        self.temperature = temperature
+        self.max_new_tokens = max_new_tokens
+
+        # Determine if loading from local path (Kaggle dataset) or HuggingFace
+        if local_model_path and os.path.exists(local_model_path):
+            print(f"📂 Loading model from local path: {local_model_path}")
+            model_path = local_model_path
+            use_auth_token = None
+            local_files_only = True
+        else:
+            print(f"🌐 Loading model from HuggingFace: {model_name}")
+            print(f"   (Will use cached version if available)")
+            _load_hf_token_from_env()
+            model_path = model_name
+            use_auth_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
+            local_files_only = False
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            token=use_auth_token,
+            trust_remote_code=True,
+            local_files_only=local_files_only,
+        )
+
+        # Load config and patch for Phi-3 compatibility
+        print(f"📝 Loading model config...")
+        config = AutoConfig.from_pretrained(
+            model_path,
+            token=use_auth_token,
+            trust_remote_code=True,
+            local_files_only=local_files_only,
+        )
+        
+        # Fix Phi-3 RoPE configuration issue
+        if "phi" in model_name.lower() or "phi" in str(config.model_type).lower():
+            print(f"🔧 Detected Phi model - applying compatibility fixes...")
+            config._attn_implementation = "eager"
+            
+            # Remove problematic rope_scaling if it's incomplete
+            if hasattr(config, 'rope_scaling') and config.rope_scaling:
+                if isinstance(config.rope_scaling, dict) and 'type' not in config.rope_scaling:
+                    print(f"   ⚠️  Removing incomplete rope_scaling config")
+                    config.rope_scaling = None
+
+        load_kwargs: Dict[str, object] = {
+            "config": config,  # Use patched config
+            "device_map": "auto",
+            "trust_remote_code": True,
+            "attn_implementation": "eager",  # Fix for Phi-3 flash-attention issues
+            "local_files_only": local_files_only,
+        }
+        
+        if use_auth_token:
+            load_kwargs["token"] = use_auth_token
+
+        if torch.cuda.is_available():
+            load_kwargs["torch_dtype"] = torch.float16
+        else:
+            load_kwargs["torch_dtype"] = torch.float32
+
+        if quantize_4bit and torch.cuda.is_available():
+            if _has_bitsandbytes():
+                print("⚡ Loading model in 4-bit quantized mode")
+
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                )
+
+                load_kwargs["quantization_config"] = bnb_config
+
+                # IMPORTANT: remove torch_dtype when using 4bit
+                load_kwargs.pop("torch_dtype", None)
+
+            else:
+                print("⚠ bitsandbytes not available, loading full precision model.")
+
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            **load_kwargs,
+        )
+
+        self.model.eval()
+
+    def generate(self, user_prompt: str, system_prompt: str) -> str:
+        prompt_text = self._format_prompt(system_prompt, user_prompt)
+        inputs = self.tokenizer(prompt_text, return_tensors="pt")
+
+        device = _get_model_device(self.model)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        do_sample = self.temperature is not None and self.temperature > 0
+
+        generated = self.model.generate(
+            **inputs,
+            max_new_tokens=self.max_new_tokens,
+            do_sample=do_sample,
+            temperature=self.temperature if do_sample else None,
+            top_p=0.9,
+            eos_token_id=self.tokenizer.eos_token_id,
+        )
+
+        output_text = self.tokenizer.decode(generated[0], skip_special_tokens=True)
+        if output_text.startswith(prompt_text):
+            output_text = output_text[len(prompt_text):]
+        return output_text.strip()
+
+    def _format_prompt(self, system_prompt: str, user_prompt: str) -> str:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        if hasattr(self.tokenizer, "apply_chat_template"):
+            return self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+
+        return f"{system_prompt}\n\n{user_prompt}\n\nAnswer:"
+
+
 class LLMIntegration:
     """Integrates LLM with RAG pipeline."""
     
-    def __init__(self, model_name: str = "phi3", temperature: float = 0.3):
+    def __init__(
+        self,
+        model_name: str = "microsoft/Phi-3-mini-4k-instruct",
+        temperature: float = 0.3,
+        max_new_tokens: int = 256,
+        backend: str = "hf",
+        local_model_path: str = None,  # Path to local model (Kaggle dataset or local cache)
+    ):
         """
         Initialize LLM integration.
         
         Args:
-            model_name: Name of the Ollama model to use
+            model_name: Name of the Hugging Face model to use
             temperature: Temperature for generation (0-1)
+            max_new_tokens: Maximum tokens to generate
+            backend: Backend name (only "hf" supported right now)
+            local_model_path: Path to local model directory (optional, for Kaggle datasets)
         """
         self.model_name = model_name
         self.temperature = temperature
+        self.max_new_tokens = max_new_tokens
+        self.backend = backend
         
-        # Initialize Ollama LLM
-        self.llm = OllamaLLM(
-            model=model_name,
+        if backend != "hf":
+            raise ValueError(f"Unsupported backend: {backend}. Use backend=\"hf\".")
+
+        self.llm = HFBackend(
+            model_name=model_name,
             temperature=temperature,
-            top_p=0.9,
-            top_k=40,
-            num_predict= None
+            max_new_tokens=max_new_tokens,
+            quantize_4bit=True,
+            local_model_path=local_model_path,  # Pass through to backend
         )
     
     def generate_answer(self, query: str, context: str) -> str:
@@ -87,32 +255,26 @@ class LLMIntegration:
             Generated answer
         """
         prompt = RAGPrompt.create_answer_prompt(query, context)
-        
+        system_prompt = RAGPrompt.get_system_prompt()
+
         try:
-            # response = self.llm(prompt)
-            response = self.llm.invoke(prompt)
+            response = self.llm.generate(prompt, system_prompt)
             return response.strip()
         except Exception as e:
             print(f"Error generating answer: {e}")
             return "Unable to generate answer at this time."
-    
-    @staticmethod
-    def format_context(chunks: List[Dict]) -> str:
-        """
-        Format retrieved chunks into context string.
-        
-        Args:
-            chunks: List of retrieved chunks
-            
-        Returns:
-            Formatted context string
-        """
-        context_parts = []
-        
-        for i, chunk in enumerate(chunks, 1):
-            context_parts.append(
-                f"[Source {i}: {chunk['document']}, Page {chunk['page']}]\n"
-                f"{chunk['text']}\n"
-            )
-        
-        return "\n".join(context_parts)
+
+
+def _has_bitsandbytes() -> bool:
+    try:
+        import bitsandbytes  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _get_model_device(model: AutoModelForCausalLM) -> torch.device:
+    try:
+        return next(model.parameters()).device
+    except StopIteration:
+        return torch.device("cpu")
