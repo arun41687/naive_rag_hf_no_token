@@ -14,8 +14,8 @@ class RAGSystem:
         self,
         model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
         embedding_model: str = "all-MiniLM-L6-v2",
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 150,
         use_reranker: bool = True,
         local_model_path: str = None  # Local model path (auto-detected or manual)
     ):
@@ -108,8 +108,8 @@ class RAGSystem:
                 "sources": []
             }
         
-        # Retrieve relevant chunks
-        retrieved_chunks = self.retriever.retrieve(query, top_k=5, rerank=True)
+        # Retrieve relevant chunks with diversity (max 2 chunks per page)
+        retrieved_chunks = self.retriever.retrieve_diverse(query, top_k=5, max_per_page=2)
         
         if not retrieved_chunks:
             return {

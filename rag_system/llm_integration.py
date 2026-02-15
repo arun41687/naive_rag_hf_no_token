@@ -73,7 +73,7 @@ class HFBackend:
         self,
         model_name: str,
         temperature: float = 0.3,
-        max_new_tokens: int = 120,
+        max_new_tokens: int = 200,
         quantize_4bit: bool = True,
         local_model_path: str = None,  # NEW: Allow loading from local path
     ) -> None:
@@ -171,8 +171,15 @@ class HFBackend:
         )
 
         output_text = self.tokenizer.decode(generated[0], skip_special_tokens=True)
-        if output_text.startswith(prompt_text):
+        
+        # Extract only the generated answer (remove prompt)
+        # For chat templates (Mistral uses [INST]...[/INST] format)
+        if "[/INST]" in output_text:
+            output_text = output_text.split("[/INST]")[-1].strip()
+        elif output_text.startswith(prompt_text):
+            # Fallback for non-chat-template models
             output_text = output_text[len(prompt_text):]
+        
         return output_text.strip()
 
     def _format_prompt(self, system_prompt: str, user_prompt: str) -> str:
@@ -198,7 +205,7 @@ class LLMIntegration:
         self,
         model_name: str = "mistralai/Mistral-7B-Instruct-v0.2",
         temperature: float = 0.3,
-        max_new_tokens: int = 256,
+        max_new_tokens: int = 300,
         backend: str = "hf",
         local_model_path: str = None,  # Path to local model (Kaggle dataset or local cache)
     ):

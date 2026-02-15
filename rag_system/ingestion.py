@@ -11,7 +11,7 @@ import numpy as np
 class DocumentIngestor:
     """Handles PDF parsing and text chunking."""
     
-    def __init__(self, chunk_size: int = 500, overlap: int = 50):
+    def __init__(self, chunk_size: int = 1000, overlap: int = 150):
         """
         Initialize the document ingestor.
         

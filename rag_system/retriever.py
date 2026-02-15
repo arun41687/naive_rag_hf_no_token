@@ -69,6 +69,40 @@ class RetrieverWithReranker:
                 for result in results[:top_k]
             ]
     
+    def retrieve_diverse(self, query: str, top_k: int = 5, max_per_page: int = 2) -> List[Dict]:
+        """
+        Retrieve diverse chunks with page diversity constraint.
+        Prevents over-reliance on a single page by limiting chunks per page.
+        
+        Args:
+            query: Search query
+            top_k: Number of results to return
+            max_per_page: Maximum chunks allowed from same page
+            
+        Returns:
+            List of diverse relevant chunks with scores
+        """
+        # Get more candidates than needed for diversity filtering
+        candidates = self.retrieve(query, top_k=top_k * 2, rerank=True)
+        
+        selected = []
+        page_count = {}
+        
+        for chunk in candidates:
+            page = chunk.get('page', 0)
+            current_count = page_count.get(page, 0)
+            
+            # Add chunk if under page limit
+            if current_count < max_per_page:
+                selected.append(chunk)
+                page_count[page] = current_count + 1
+            
+            # Stop when we have enough diverse chunks
+            if len(selected) >= top_k:
+                break
+        
+        return selected
+    
     @staticmethod
     def format_sources(chunks: List[Dict]) -> List[str]:
         """Format chunks into source citations."""
